@@ -7,17 +7,17 @@ import * as compression from 'compression';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { bufferLogs: true });
   const configService = app.get(ConfigService);
 
   // Security & performance middleware
   app.use(helmet());
   app.use(compression());
+
   const httpInstance = app.getHttpAdapter().getInstance();
   httpInstance.set('trust proxy', 1);
 
   // CORS configuration
-  // Permitir explicitamente os origins do Vite por omissão para evitar falhas de preflight
   const corsOrigins = configService
     .get('CORS_ORIGIN', 'http://localhost:5173,http://127.0.0.1:5173')
     .split(',');
@@ -49,7 +49,7 @@ async function bootstrap() {
 
   // Swagger documentation (optional via ENABLE_SWAGGER=true)
   if (configService.get('ENABLE_SWAGGER') === 'true') {
-    const config = new DocumentBuilder()
+    const swaggerConfig = new DocumentBuilder()
       .setTitle('YMR System API')
       .setDescription('Complete REST API for YMR System - Equipment Management Platform')
       .setVersion('1.0')
@@ -67,7 +67,7 @@ async function bootstrap() {
       .addServer('/api')
       .build();
 
-    const document = SwaggerModule.createDocument(app, config, { ignoreGlobalPrefix: false });
+    const document = SwaggerModule.createDocument(app, swaggerConfig, { ignoreGlobalPrefix: false });
     SwaggerModule.setup('api/docs', app, document, {
       customSiteTitle: 'YMR System API Documentation',
       customfavIcon: '/favicon.ico',
@@ -81,6 +81,7 @@ async function bootstrap() {
         operationsSorter: 'alpha',
       },
     });
+
     // Redirect root '/' to Swagger docs when enabled
     app.getHttpAdapter().getInstance().get('/', (_req, res) => res.redirect('/api/docs'));
   }
@@ -88,8 +89,10 @@ async function bootstrap() {
   // Global prefix (combined with URI versioning → /api/v1)
   app.setGlobalPrefix('api');
 
-  const port = configService.get('PORT', 3000);
-  const host = configService.get('HOST', '0.0.0.0');
+  // Use PORT and HOST do Render ou valores padrão
+  const port = parseInt(process.env.PORT) || configService.get<number>('PORT', 3000);
+  const host = process.env.HOST || configService.get<string>('HOST', '0.0.0.0');
+
   // Enable graceful shutdown via Nest lifecycle hooks
   app.enableShutdownHooks();
   await app.listen(port, host);
