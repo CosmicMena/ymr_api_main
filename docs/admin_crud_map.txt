@@ -1,0 +1,203 @@
+YMR Admin CRUD Map (para Bolt AI)
+
+Base API: /api/v1
+Autenticação: JWT Bearer
+Perfis/Papéis: admin, manager (e permissões específicas ex.: brands.create, brands.update, brands.delete)
+
+Convenções gerais
+- Rotas públicas usam o marcador Public() no controller
+- CRUD administrativo exige JWT + guardas de roles
+- Campos createdAt/updatedAt/ids são geridos pelo sistema e não editáveis diretamente (salvo exceções explícitas)
+- Soft delete: não se aplica; Delete remove o recurso (ver conflitos por vínculos)
+
+1) Brands (Marcas)
+Model: Brand { id, name, logoUrl, description, isActive, createdAt, updatedAt }
+Campos editáveis pelo administrador: name, logoUrl, description, isActive
+Campos não editáveis: id, createdAt, updatedAt
+Endpoints
+- POST /brands [auth, role: brands.create] — criar
+- GET /brands [público, paginação e filtros: page, limit, search, isActive] — listar
+- GET /brands/:id [público] — obter
+- PATCH /brands/:id [auth, role: brands.update] — atualizar
+- DELETE /brands/:id [auth, role: brands.delete] — remover (bloqueado se houver produtos associados)
+
+2) Categories (Categorias)
+Model: Category { id, name, imageUrl, description, isActive, createdAt, updatedAt }
+Campos editáveis: name, imageUrl, description, isActive
+Campos não editáveis: id, createdAt, updatedAt
+Endpoints
+- POST /categories [roles: admin|manager] — criar
+- GET /categories [público, filtros: isActive, search] — listar
+- GET /categories/active [público] — listar ativas
+- GET /categories/:id [público] — obter
+- PATCH /categories/:id [roles: admin|manager] — atualizar
+- DELETE /categories/:id [role: admin] — remover (conflita se houver produtos/subcategorias vinculados)
+
+3) Subcategories (Subcategorias)
+Model: Subcategory { id, name, categoryId, isActive, createdAt, updatedAt }
+Campos editáveis: name, categoryId, isActive
+Campos não editáveis: id, createdAt, updatedAt
+Endpoints (padrão esperado)
+- POST /subcategories [roles: admin|manager]
+- GET /subcategories [público? filtros por categoryId, isActive]
+- GET /subcategories/:id [público]
+- PATCH /subcategories/:id [roles: admin|manager]
+- DELETE /subcategories/:id [role: admin]
+
+4) Products (Produtos)
+Model: Product { id, code, name, model?, description?, features[], images[], specifications(Json), documents(Json), availability, price(Decimal), stockQuantity, viewCount, isActive, subcategoryId?, brandId?, createdAt, updatedAt }
+Campos editáveis: code, name, model, description, features, images, specifications, documents, availability, price, stockQuantity, isActive, subcategoryId, brandId
+Campos calculados/sistema: id, viewCount (incremental), createdAt, updatedAt
+Endpoints
+- POST /products [roles: admin|manager]
+- GET /products [público, filtros: page, limit, search, categoryId, brandId, minPrice, maxPrice, isActive, sortBy, sortOrder]
+- GET /products/popular [público]
+- GET /products/featured [público]
+- GET /products/:id [público]
+- PATCH /products/:id [roles: admin|manager]
+- DELETE /products/:id [role: admin]
+
+5) Users (Utilizadores)
+Model: User { id, name, email, phone?, birthDate?, address?, city?, country, company?, position?, avatarUrl?, passwordHash?, googleId?, emailVerified, isActive, preferredContactMethod, createdAt, updatedAt, lastLogin? }
+Admin pode editar: name, phone, birthDate, address, city, country, company, position, avatarUrl, isActive, preferredContactMethod, emailVerified (com cautela), password reset via fluxo específico (não expor passwordHash diretamente)
+Não editáveis: id, email (alterações devem ser fluxo próprio), googleId, createdAt, updatedAt, lastLogin
+Endpoints (padrão esperado)
+- POST /users [roles: admin]
+- GET /users [auth, filtros]
+- GET /users/:id [auth]
+- PATCH /users/:id [roles: admin|manager]
+- DELETE /users/:id [role: admin]
+
+6) AdminUsers (Administradores)
+Model: AdminUser { id, name, email, passwordHash, avatarUrl?, roleId, isActive, lastLogin?, createdBy?, createdAt, updatedAt }
+Editáveis: name, avatarUrl, roleId, isActive; reset de password por fluxo dedicado
+Não editáveis: id, email (com fluxo próprio), passwordHash direto, createdAt, updatedAt, lastLogin, createdBy
+Endpoints
+- POST /admin-users [auth]
+- GET /admin-users [auth, paginação e filtros]
+- GET /admin-users/:id [auth]
+- PATCH /admin-users/:id [auth]
+- DELETE /admin-users/:id [auth]
+
+7) Statuses (Estados)
+Model: Status { id, name, description?, color?, isActive }
+Editáveis: name, description, color, isActive
+Não editáveis: id
+Endpoints
+- POST /statuses [auth]
+- GET /statuses [auth, paginação e filtros]
+- GET /statuses/:id [auth]
+- PATCH /statuses/:id [auth]
+- DELETE /statuses/:id [auth]
+
+8) QuoteRequests (Pedidos de Cotação)
+Model: QuoteRequest { id, code, userId, statusId, totalItems, notes?, adminNotes?, expiresAt?, createdAt, updatedAt }
+Admin edita: statusId, adminNotes, expiresAt, notes (opcional); totalItems é derivado dos QuoteItems
+Não editáveis: id, code, userId, createdAt, updatedAt
+Endpoints (padrão)
+- POST /quote-requests [público/autenticado]
+- GET /quote-requests [auth]
+- GET /quote-requests/:id [auth]
+- PATCH /quote-requests/:id [auth]
+- DELETE /quote-requests/:id [auth]
+
+9) QuoteItems (Itens de Cotação)
+Model: QuoteItem { id, quoteRequestId, productId, quantity, unitPrice?, totalPrice?, notes?, createdAt }
+Admin edita: productId, quantity, unitPrice, totalPrice, notes
+Não editáveis: id, quoteRequestId (vincula à cotação existente), createdAt
+Endpoints
+- POST /quote-items [auth]
+- GET /quote-items [auth]
+- GET /quote-items/:id [auth]
+- PATCH /quote-items/:id [auth]
+- DELETE /quote-items/:id [auth]
+
+10) Orders (Pedidos)
+Model: Order { id, code, userId, statusId, serviceType?, totalAmount?, currency, notes?, deliveryAddress?, deliveryDate?, createdAt, updatedAt }
+Admin edita: statusId, serviceType, notes, deliveryAddress, deliveryDate, totalAmount (se necessário via lógica interna)
+Não editáveis: id, code, userId, currency (padrão), createdAt, updatedAt
+Endpoints
+- POST /orders [auth]
+- GET /orders [auth]
+- GET /orders/:id [auth]
+- PATCH /orders/:id [auth]
+- DELETE /orders/:id [auth]
+
+11) OrderItems (Itens de Pedido)
+Model: OrderItem { id, orderId, productId?, serviceDescription?, quantity, unitPrice?, totalPrice?, createdAt }
+Admin edita: productId, serviceDescription, quantity, unitPrice, totalPrice
+Não editáveis: id, orderId, createdAt
+Endpoints
+- POST /order-items [auth]
+- GET /order-items [auth]
+- GET /order-items/:id [auth]
+- PATCH /order-items/:id [auth]
+- DELETE /order-items/:id [auth]
+
+12) ShoppingCarts (Carrinho)
+Model: ShoppingCart { id, userId?, sessionId?, productId, quantity, createdAt, updatedAt }
+Admin pode ajustar: quantity; userId/sessionId apenas em casos de suporte
+Não editáveis: id, productId, createdAt, updatedAt
+Endpoints (admin raramente usa diretamente)
+- GET /shopping-carts [auth]
+- PATCH /shopping-carts/:id [auth]
+- DELETE /shopping-carts/:id [auth]
+
+13) UserFavorites (Favoritos)
+Model: UserFavorite { id, userId, productId, createdAt }
+Admin normalmente não altera; pode remover registros indevidos
+Não editáveis: id, userId, productId, createdAt
+Endpoints
+- GET /user-favorites [auth]
+- DELETE /user-favorites/:id [auth]
+
+14) MessageThreads (Tópicos de Mensagens) e Messages (Mensagens)
+MessageThread { id, subject, userId?, adminId?, status, priority, createdAt, updatedAt }
+- Admin edita: status, priority, subject
+- Não editáveis: id, userId, adminId, createdAt, updatedAt
+Message { id, threadId, senderType, senderId, content, attachments?, isRead, createdAt }
+- Admin edita: isRead (toggle), content (correção via fluxo?), attachments (com cautela)
+- Não editáveis: id, threadId, senderType, senderId, createdAt
+Endpoints (padrão)
+- GET /message-threads, GET /message-threads/:id, PATCH /message-threads/:id
+- POST /messages, GET /messages/:id, PATCH /messages/:id, DELETE /messages/:id
+
+15) NewsletterSubscriptions (Newsletter)
+Model: NewsletterSubscription { id, email, name?, isActive, interests[], subscribedAt, unsubscribedAt? }
+Admin edita: name, isActive, interests, unsubscribedAt
+Não editáveis: id, email (alteração via fluxo específico), subscribedAt
+Endpoints
+- GET /newsletter-subscriptions [auth]
+- GET /newsletter-subscriptions/:id [auth]
+- PATCH /newsletter-subscriptions/:id [auth]
+- DELETE /newsletter-subscriptions/:id [auth]
+
+16) Status/Logs e Métricas
+ActivityLog { id, userId?, adminId?, action, description?, resourceType?, resourceId?, ipAddress?, userAgent?, metadata?, createdAt }
+- Admin não altera registros; apenas consulta. Opcionalmente pode remover por compliance.
+SiteVisit { id, ipAddress, userAgent?, referer?, pageUrl?, country?, region?, city?, latitude?, longitude?, sessionId?, userId?, visitDuration?, createdAt }
+- Apenas consulta.
+UserStatistics { id, userId, ordersCount, consultationsCount, rentalsCount, loyaltyPoints, totalSpent, lastActivity?, createdAt, updatedAt }
+- Consulta; correções manuais sob fluxo estrito (evitar edição direta)
+UserActivity { id, userId, activityType, title, description?, icon?, color?, metadata?, createdAt }
+- Somente consulta; em casos excepcionais, remoção
+
+17) Acesso e Permissões (RBAC)
+AccessPermission { id, name, resource, action, description?, createdAt }
+- CRUD restrito ao super admin
+UserRole { id, name, description?, permissions(Json)?, isActive, createdAt }
+- CRUD restrito ao super admin; vincula a AdminUser via roleId
+RolePermission { roleId, permissionId, grantedAt }
+- Gerido via endpoints de vínculo (grant/revoke)
+Endpoints (padrão)
+- POST/GET/PATCH/DELETE /access-permissions
+- POST/GET/PATCH/DELETE /user-roles
+- POST/DELETE /role-permissions (grant/revoke)
+
+Observações para o Front Admin (Bolt AI)
+- Sempre enviar Authorization: Bearer <token>
+- Respeitar validações: campos obrigatórios e tipos conforme DTOs
+- Tratar respostas de sucesso usando envoltórios SuccessResponseDto onde aplicável
+- Respeitar paginação e filtros quando oferecidos
+- Proteger ações destrutivas com confirmação e tratar erros de conflito (409)
+

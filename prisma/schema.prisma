@@ -1,0 +1,411 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Brand {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String    @unique @db.VarChar(100)
+  logoUrl     String?   @map("logo_url")
+  description String?
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  products Product[]
+
+  @@map("brands")
+}
+
+model Category {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String    @unique @db.VarChar(100)
+  imageUrl    String?   @map("image_url")
+  description String?
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  subcategories Subcategory[]
+
+  @@map("categories")
+}
+
+model Subcategory {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String    @db.VarChar(100)
+  categoryId  String    @map("category_id") @db.Uuid
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  category Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  products Product[]
+
+  @@unique([categoryId, name])
+  @@map("subcategories")
+}
+
+model Product {
+  id             String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code           String  @unique @db.VarChar(50)
+  name           String  @db.VarChar(200)
+  model          String? @db.VarChar(100)
+  description    String?
+  features       String[]
+  images         String[]
+  specifications Json?   @db.JsonB
+  documents      Json?   @db.JsonB
+  availability   String  @default("Em Estoque") @db.VarChar(50)
+  price          Decimal @db.Decimal(15, 2)
+  stockQuantity  Int     @default(0) @map("stock_quantity")
+  viewCount      Int     @default(0) @map("view_count")
+  isActive       Boolean @default(true) @map("is_active")
+  subcategoryId  String? @map("subcategory_id") @db.Uuid
+  brandId        String? @map("brand_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  subcategory      Subcategory?    @relation(fields: [subcategoryId], references: [id], onDelete: SetNull)
+  brand            Brand?          @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  quoteItems       QuoteItem[]
+  shoppingCarts    ShoppingCart[]
+  orderItems       OrderItem[]
+  userFavorites    UserFavorite[]
+
+  @@map("products")
+}
+
+model User {
+  id                      String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                    String    @db.VarChar(150)
+  email                   String    @unique @db.VarChar(150)
+  phone                   String?   @db.VarChar(20)
+  birthDate               DateTime? @map("birth_date") @db.Date
+  address                 String?
+  city                    String?   @db.VarChar(100)
+  country                 String    @default("Angola") @db.VarChar(100)
+  company                 String?   @db.VarChar(150)
+  position                String?   @db.VarChar(100)
+  avatarUrl               String?   @map("avatar_url")
+  passwordHash            String?   @map("password_hash")
+  googleId                String?   @unique @map("google_id") @db.VarChar(100)
+  emailVerified           Boolean   @default(false) @map("email_verified")
+  isActive                Boolean   @default(true) @map("is_active")
+  preferredContactMethod  String    @default("email") @map("preferred_contact_method") @db.VarChar(20)
+  createdAt               DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  lastLogin               DateTime? @map("last_login") @db.Timestamptz(6)
+
+  quoteRequests    QuoteRequest[]
+  shoppingCarts    ShoppingCart[]
+  orders           Order[]
+  userFavorites    UserFavorite[]
+  messageThreads   MessageThread[]
+  activityLogs     ActivityLog[]
+  siteVisits       SiteVisit[]
+  userStatistics   UserStatistics?
+  userActivities   UserActivity[]
+
+  @@map("users")
+}
+
+model UserRole {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String    @unique @db.VarChar(50)
+  description String?
+  permissions Json?     @db.JsonB
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  adminUsers      AdminUser[]
+  rolePermissions RolePermission[]
+
+  @@map("user_roles")
+}
+
+model AdminUser {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name         String    @db.VarChar(150)
+  email        String    @unique @db.VarChar(150)
+  passwordHash String    @map("password_hash")
+  avatarUrl    String?   @map("avatar_url")
+  roleId       String    @map("role_id") @db.Uuid
+  isActive     Boolean   @default(true) @map("is_active")
+  lastLogin    DateTime? @map("last_login") @db.Timestamptz(6)
+  createdBy    String?   @map("created_by") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  role           UserRole        @relation(fields: [roleId], references: [id])
+  creator        AdminUser?      @relation("AdminUserCreator", fields: [createdBy], references: [id])
+  createdAdmins  AdminUser[]     @relation("AdminUserCreator")
+  messageThreads MessageThread[]
+  activityLogs   ActivityLog[]
+
+  @@map("admin_users")
+}
+
+model Status {
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String  @unique @db.VarChar(50)
+  description String?
+  color       String? @db.VarChar(7)
+  isActive    Boolean @default(true) @map("is_active")
+
+  quoteRequests QuoteRequest[]
+  orders        Order[]
+
+  @@map("statuses")
+}
+
+model QuoteRequest {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code       String    @unique @db.VarChar(20)
+  userId     String    @map("user_id") @db.Uuid
+  statusId   String    @map("status_id") @db.Uuid
+  totalItems Int       @default(0) @map("total_items")
+  notes      String?
+  adminNotes String?   @map("admin_notes")
+  expiresAt  DateTime? @map("expires_at") @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status     Status      @relation(fields: [statusId], references: [id])
+  quoteItems QuoteItem[]
+
+  @@map("quote_requests")
+}
+
+model QuoteItem {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  quoteRequestId String   @map("quote_request_id") @db.Uuid
+  productId      String   @map("product_id") @db.Uuid
+  quantity       Int      @default(1)
+  unitPrice      Decimal? @map("unit_price") @db.Decimal(15, 2)
+  totalPrice     Decimal? @map("total_price") @db.Decimal(15, 2)
+  notes          String?
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  quoteRequest QuoteRequest @relation(fields: [quoteRequestId], references: [id], onDelete: Cascade)
+  product      Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("quote_items")
+}
+
+model ShoppingCart {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String?  @map("user_id") @db.Uuid
+  sessionId String?  @map("session_id") @db.VarChar(255)
+  productId String   @map("product_id") @db.Uuid
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user    User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@unique([sessionId, productId])
+  @@map("shopping_carts")
+}
+
+model Order {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code            String    @unique @db.VarChar(20)
+  userId          String    @map("user_id") @db.Uuid
+  statusId        String    @map("status_id") @db.Uuid
+  serviceType     String?   @map("service_type") @db.VarChar(100)
+  totalAmount     Decimal?  @map("total_amount") @db.Decimal(15, 2)
+  currency        String    @default("AOA") @db.VarChar(3)
+  notes           String?
+  deliveryAddress String?   @map("delivery_address")
+  deliveryDate    DateTime? @map("delivery_date") @db.Date
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user       User        @relation(fields: [userId], references: [id])
+  status     Status      @relation(fields: [statusId], references: [id])
+  orderItems OrderItem[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id                 String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orderId            String   @map("order_id") @db.Uuid
+  productId          String?  @map("product_id") @db.Uuid
+  serviceDescription String?  @map("service_description")
+  quantity           Int      @default(1)
+  unitPrice          Decimal? @map("unit_price") @db.Decimal(15, 2)
+  totalPrice         Decimal? @map("total_price") @db.Decimal(15, 2)
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@map("order_items")
+}
+
+model UserFavorite {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  productId String   @map("product_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@map("user_favorites")
+}
+
+model MessageThread {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subject   String   @db.VarChar(255)
+  userId    String?  @map("user_id") @db.Uuid
+  adminId   String?  @map("admin_id") @db.Uuid
+  status    String   @default("open") @db.VarChar(20)
+  priority  String   @default("normal") @db.VarChar(10)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user     User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  admin    AdminUser?  @relation(fields: [adminId], references: [id], onDelete: SetNull)
+  messages Message[]
+
+  @@map("message_threads")
+}
+
+model Message {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  threadId    String   @map("thread_id") @db.Uuid
+  senderType  String   @map("sender_type") @db.VarChar(10)
+  senderId    String   @map("sender_id") @db.Uuid
+  content     String
+  attachments Json?    @db.JsonB
+  isRead      Boolean  @default(false) @map("is_read")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  thread MessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+}
+
+model NewsletterSubscription {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email          String    @unique @db.VarChar(150)
+  name           String?   @db.VarChar(150)
+  isActive       Boolean   @default(true) @map("is_active")
+  interests      String[]
+  subscribedAt   DateTime  @default(now()) @map("subscribed_at") @db.Timestamptz(6)
+  unsubscribedAt DateTime? @map("unsubscribed_at") @db.Timestamptz(6)
+
+  @@map("newsletter_subscriptions")
+}
+
+model ActivityLog {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String?  @map("user_id") @db.Uuid
+  adminId      String?  @map("admin_id") @db.Uuid
+  action       String   @db.VarChar(100)
+  description  String?
+  resourceType String?  @map("resource_type") @db.VarChar(50)
+  resourceId   String?  @map("resource_id") @db.Uuid
+  ipAddress    String?  @map("ip_address")
+  userAgent    String?  @map("user_agent")
+  metadata     Json?    @db.JsonB
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user  User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  admin AdminUser? @relation(fields: [adminId], references: [id], onDelete: SetNull)
+
+  @@map("activity_logs")
+}
+
+model SiteVisit {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ipAddress     String   @map("ip_address")
+  userAgent     String?  @map("user_agent")
+  referer       String?
+  pageUrl       String?  @map("page_url")
+  country       String?  @db.VarChar(2)
+  region        String?  @db.VarChar(100)
+  city          String?  @db.VarChar(100)
+  latitude      Decimal? @db.Decimal(10, 8)
+  longitude     Decimal? @db.Decimal(11, 8)
+  sessionId     String?  @map("session_id") @db.VarChar(255)
+  userId        String?  @map("user_id") @db.Uuid
+  visitDuration Int?     @map("visit_duration")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("site_visits")
+}
+
+model UserStatistics {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId             String    @unique @map("user_id") @db.Uuid
+  ordersCount        Int       @default(0) @map("orders_count")
+  consultationsCount Int       @default(0) @map("consultations_count")
+  rentalsCount       Int       @default(0) @map("rentals_count")
+  loyaltyPoints      Int       @default(0) @map("loyalty_points")
+  totalSpent         Decimal   @default(0) @map("total_spent") @db.Decimal(15, 2)
+  lastActivity       DateTime? @map("last_activity") @db.Timestamptz(6)
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_statistics")
+}
+
+model UserActivity {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  activityType String   @map("activity_type") @db.VarChar(50)
+  title        String   @db.VarChar(255)
+  description  String?
+  icon         String?  @db.VarChar(50)
+  color        String?  @db.VarChar(20)
+  metadata     Json?    @db.JsonB
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_activities")
+}
+
+model AccessPermission {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String   @unique @db.VarChar(100)
+  resource    String   @db.VarChar(50)
+  action      String   @db.VarChar(50)
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  rolePermissions RolePermission[]
+
+  @@map("access_permissions")
+}
+
+model RolePermission {
+  roleId       String   @map("role_id") @db.Uuid
+  permissionId String   @map("permission_id") @db.Uuid
+  grantedAt    DateTime @default(now()) @map("granted_at") @db.Timestamptz(6)
+
+  role       UserRole         @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission AccessPermission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}

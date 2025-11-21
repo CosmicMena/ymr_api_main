@@ -1,0 +1,387 @@
+"use strict";
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
+var __metadata = (this && this.__metadata) || function (k, v) {
+    if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.OrderService = void 0;
+const common_1 = require("@nestjs/common");
+const prisma_service_1 = require("../../common/prisma/prisma.service");
+let OrderService = class OrderService {
+    constructor(prisma) {
+        this.prisma = prisma;
+    }
+    async create(createOrderDto) {
+        const user = await this.prisma.user.findUnique({
+            where: { id: createOrderDto.userId },
+        });
+        if (!user) {
+            throw new common_1.NotFoundException('Usuário não encontrado');
+        }
+        const status = await this.prisma.status.findUnique({
+            where: { id: createOrderDto.statusId },
+        });
+        if (!status) {
+            throw new common_1.NotFoundException('Status não encontrado');
+        }
+        const orderCode = await this.generateUniqueOrderCode();
+        return this.prisma.order.create({
+            data: {
+                code: orderCode,
+                userId: createOrderDto.userId,
+                statusId: createOrderDto.statusId,
+                serviceType: createOrderDto.serviceType,
+                totalAmount: createOrderDto.totalAmount,
+                currency: createOrderDto.currency,
+                notes: createOrderDto.notes,
+                deliveryAddress: createOrderDto.deliveryAddress,
+                deliveryDate: createOrderDto.deliveryDate ? new Date(createOrderDto.deliveryDate) : null,
+            },
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        name: true,
+                        email: true,
+                        phone: true,
+                    },
+                },
+                status: {
+                    select: {
+                        id: true,
+                        name: true,
+                        description: true,
+                    },
+                },
+                orderItems: {
+                    include: {
+                        product: {
+                            select: {
+                                id: true,
+                                name: true,
+                                code: true,
+                                price: true,
+                            },
+                        },
+                    },
+                },
+                _count: {
+                    select: {
+                        orderItems: true,
+                    },
+                },
+            },
+        });
+    }
+    async findAll(paginationDto, filterDto) {
+        const { page = 1, limit = 10 } = paginationDto;
+        const { search, userId, statusId, serviceType, minAmount, maxAmount, startDate, endDate, sortBy = 'createdAt', sortOrder = 'desc' } = filterDto;
+        const skip = (page - 1) * limit;
+        const take = Math.min(limit, 100);
+        const where = {};
+        if (search) {
+            where.OR = [
+                { code: { contains: search, mode: 'insensitive' } },
+                { notes: { contains: search, mode: 'insensitive' } },
+            ];
+        }
+        if (userId) {
+            where.userId = userId;
+        }
+        if (statusId) {
+            where.statusId = statusId;
+        }
+        if (serviceType) {
+            where.serviceType = serviceType;
+        }
+        if (minAmount !== undefined || maxAmount !== undefined) {
+            where.totalAmount = {};
+            if (minAmount !== undefined) {
+                where.totalAmount.gte = minAmount;
+            }
+            if (maxAmount !== undefined) {
+                where.totalAmount.lte = maxAmount;
+            }
+        }
+        if (startDate || endDate) {
+            where.createdAt = {};
+            if (startDate) {
+                where.createdAt.gte = new Date(startDate);
+            }
+            if (endDate) {
+                where.createdAt.lte = new Date(endDate);
+            }
+        }
+        const orderBy = {};
+        orderBy[sortBy] = sortOrder;
+        const [orders, total] = await Promise.all([
+            this.prisma.order.findMany({
+                where,
+                skip,
+                take,
+                orderBy,
+                include: {
+                    user: {
+                        select: {
+                            id: true,
+                            name: true,
+                            email: true,
+                        },
+                    },
+                    status: {
+                        select: {
+                            id: true,
+                            name: true,
+                        },
+                    },
+                    orderItems: {
+                        select: {
+                            id: true,
+                            quantity: true,
+                            unitPrice: true,
+                            totalPrice: true,
+                        },
+                    },
+                    _count: {
+                        select: {
+                            orderItems: true,
+                        },
+                    },
+                },
+            }),
+            this.prisma.order.count({ where }),
+        ]);
+        const totalPages = Math.ceil(total / take);
+        return {
+            data: orders,
+            pagination: {
+                page,
+                limit: take,
+                total,
+                totalPages,
+            },
+        };
+    }
+    async findActiveOrders(limit = 50) {
+        return this.prisma.order.findMany({
+            take: Math.min(limit, 100),
+            orderBy: { createdAt: 'desc' },
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        name: true,
+                        email: true,
+                    },
+                },
+                status: {
+                    select: {
+                        id: true,
+                        name: true,
+                    },
+                },
+                _count: {
+                    select: {
+                        orderItems: true,
+                    },
+                },
+            },
+        });
+    }
+    async findUrgentOrders(limit = 20) {
+        return this.prisma.order.findMany({
+            take: Math.min(limit, 100),
+            orderBy: { createdAt: 'asc' },
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        name: true,
+                        email: true,
+                        phone: true,
+                    },
+                },
+                status: {
+                    select: {
+                        id: true,
+                        name: true,
+                    },
+                },
+            },
+        });
+    }
+    async getOrderStats() {
+        const [totalOrders, ordersThisMonth, ordersByStatus, ordersByServiceType, totalRevenue, averageOrderValue,] = await Promise.all([
+            this.prisma.order.count(),
+            this.prisma.order.count({
+                where: {
+                    createdAt: {
+                        gte: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+                    },
+                },
+            }),
+            this.prisma.order.groupBy({
+                by: ['statusId'],
+                _count: { statusId: true },
+            }),
+            this.prisma.order.groupBy({
+                by: ['serviceType'],
+                _count: { serviceType: true },
+                where: { serviceType: { not: null } },
+            }),
+            this.prisma.order.aggregate({
+                _sum: { totalAmount: true },
+            }),
+            this.prisma.order.aggregate({
+                _avg: { totalAmount: true },
+            }),
+        ]);
+        return {
+            totalOrders,
+            ordersThisMonth,
+            ordersByStatus: ordersByStatus.reduce((acc, item) => {
+                acc[item.statusId] = item._count.statusId;
+                return acc;
+            }, {}),
+            ordersByServiceType: ordersByServiceType.reduce((acc, item) => {
+                acc[item.serviceType] = item._count.serviceType;
+                return acc;
+            }, {}),
+            totalRevenue: totalRevenue._sum.totalAmount || 0,
+            averageOrderValue: averageOrderValue._avg.totalAmount || 0,
+        };
+    }
+    async findOne(id) {
+        const order = await this.prisma.order.findUnique({
+            where: { id },
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        name: true,
+                        email: true,
+                        phone: true,
+                        address: true,
+                        city: true,
+                        country: true,
+                    },
+                },
+                status: {
+                    select: {
+                        id: true,
+                        name: true,
+                        description: true,
+                    },
+                },
+                orderItems: {
+                    include: {
+                        product: {
+                            select: {
+                                id: true,
+                                name: true,
+                                code: true,
+                                price: true,
+                                description: true,
+                                brand: {
+                                    select: {
+                                        id: true,
+                                        name: true,
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+                _count: {
+                    select: {
+                        orderItems: true,
+                    },
+                },
+            },
+        });
+        if (!order) {
+            throw new common_1.NotFoundException(`Pedido com ID ${id} não encontrado`);
+        }
+        return order;
+    }
+    async update(id, updateOrderDto) {
+        await this.findOne(id);
+        if (updateOrderDto.statusId) {
+            const status = await this.prisma.status.findUnique({
+                where: { id: updateOrderDto.statusId },
+            });
+            if (!status) {
+                throw new common_1.NotFoundException('Status não encontrado');
+            }
+        }
+        const updateData = {};
+        if (updateOrderDto.statusId)
+            updateData.statusId = updateOrderDto.statusId;
+        if (updateOrderDto.serviceType)
+            updateData.serviceType = updateOrderDto.serviceType;
+        if (updateOrderDto.totalAmount)
+            updateData.totalAmount = updateOrderDto.totalAmount;
+        if (updateOrderDto.notes)
+            updateData.notes = updateOrderDto.notes;
+        if (updateOrderDto.deliveryAddress)
+            updateData.deliveryAddress = updateOrderDto.deliveryAddress;
+        if (updateOrderDto.deliveryDate)
+            updateData.deliveryDate = new Date(updateOrderDto.deliveryDate);
+        return this.prisma.order.update({
+            where: { id },
+            data: updateData,
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        name: true,
+                        email: true,
+                    },
+                },
+                status: {
+                    select: {
+                        id: true,
+                        name: true,
+                    },
+                },
+                orderItems: true,
+            },
+        });
+    }
+    async remove(id) {
+        const order = await this.findOne(id);
+        if (order.orderItems && order.orderItems.length > 0) {
+            throw new common_1.ConflictException('Não é possível remover um pedido com itens');
+        }
+        return this.prisma.order.delete({
+            where: { id },
+        });
+    }
+    async generateUniqueOrderCode() {
+        const year = new Date().getFullYear();
+        let counter = 1;
+        let orderCode;
+        do {
+            orderCode = `ORD-${year}-${counter.toString().padStart(3, '0')}`;
+            const existingOrder = await this.prisma.order.findUnique({
+                where: { code: orderCode },
+            });
+            if (!existingOrder) {
+                return orderCode;
+            }
+            counter++;
+        } while (counter <= 999);
+        throw new Error('Não foi possível gerar um código único para o pedido');
+    }
+};
+exports.OrderService = OrderService;
+exports.OrderService = OrderService = __decorate([
+    (0, common_1.Injectable)(),
+    __metadata("design:paramtypes", [prisma_service_1.PrismaService])
+], OrderService);
+//# sourceMappingURL=order.service.js.map

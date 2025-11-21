@@ -1,0 +1,200 @@
+YMR SYSTEM API - GUIA DE ENDPOINTS (USO RÁPIDO)
+
+Base URL
+- Padrão: http://localhost:<PORT>/api/v1
+- Swagger (documentação): http://localhost:<PORT>/api/docs
+- Substitua <PORT> pela porta configurada no .env (padrão 3000)
+
+Autenticação e Autorização
+- Muitos endpoints exigem Bearer JWT e permissões (RBAC via @Roles)
+- Fluxo básico:
+  1) Registrar (opcional): POST /auth/register
+  2) Login: POST /auth/login -> retorna accessToken
+  3) Usar o token: Authorization: Bearer <accessToken>
+  4) Renovar: POST /auth/refresh
+
+Exemplos (cURL)
+- Login
+  curl -X POST "http://localhost:3000/api/v1/auth/login" \
+       -H "Content-Type: application/json" \
+       -d '{"email":"user@example.com","password":"secret"}'
+
+- Usar token
+  curl -H "Authorization: Bearer <TOKEN>" http://localhost:3000/api/v1/users
+
+Padrão de Paginação e Filtros
+- Sempre que suportado: ?page=<n>&limit=<n>&...filtros
+- Resposta padrão de listagem:
+  {
+    "success": true,
+    "message": "<mensagem>",
+    "data": {
+      "data": [ ...itens ],
+      "pagination": { "page": 1, "limit": 10, "total": 123, "totalPages": 13 }
+    }
+  }
+- Filtros variam por módulo (consulte Swagger para todos os campos)
+
+Padrão CRUD por módulo (rotas típicas)
+- GET    /<resource>                -> lista (paginada, com filtros)
+- GET    /<resource>/:id            -> detalhe
+- POST   /<resource>                -> criar (JWT + Role)
+- PATCH  /<resource>/:id            -> atualizar (JWT + Role)
+- DELETE /<resource>/:id            -> remover (JWT + Role)
+
+Observações
+- Alguns GETs são públicos (ex.: Subcategories GET). Demais operações requerem JWT.
+- Use os DTOs Create*/Update*/Filter* exibidos no Swagger para os corpos e filtros corretos.
+
+Módulos e Rotas Base
+- Auth:                 /auth
+  - POST /register, POST /login, POST /refresh
+- Users:                /users
+- AdminUsers:           /admin-users
+- AccessPermissions:    /access-permissions
+- UserRoles:            /user-roles
+- RolePermissions:      /role-permissions
+- Products:             /products
+- Categories:           /categories
+- Subcategories:        /subcategories
+- Brands:               /brands
+- Orders:               /orders
+- OrderItems:           /order-items
+- QuoteRequests:        /quote-requests
+- QuoteItems:           /quote-items
+- Messages:             /messages
+- MessageThreads:       /message-threads
+- ShoppingCarts:        /shopping-carts
+- SiteVisits:           /site-visits
+- ActivityLogs:         /activity-logs
+- Statuses:             /statuses
+- NewsletterSubscriptions: /newsletter-subscriptions
+- UserFavorites:        /user-favorites
+- UserActivities:       /user-activities
+- UserStatistics:       /user-statistics
+
+Exemplos de uso (substitua <PORT> conforme seu .env)
+
+1) Listar com paginação e filtro (Products)
+  curl "http://localhost:3000/api/v1/products?page=1&limit=10&search=gerador"
+
+2) Criar (Products)
+  curl -X POST "http://localhost:3000/api/v1/products" \
+       -H "Authorization: Bearer <TOKEN>" \
+       -H "Content-Type: application/json" \
+       -d '{
+             "name":"Gerador X",
+             "brandId":"<uuid-brand>",
+             "categoryId":"<uuid-category>",
+             "subcategoryId":"<uuid-subcategory>",
+             "price": 999.90,
+             "currency": "USD",
+             "isActive": true
+           }'
+
+3) Detalhar (Products)
+  curl "http://localhost:3000/api/v1/products/<uuid>"
+
+4) Atualizar (Products)
+  curl -X PATCH "http://localhost:3000/api/v1/products/<uuid>" \
+       -H "Authorization: Bearer <TOKEN>" \
+       -H "Content-Type: application/json" \
+       -d '{"price": 1099.00}'
+
+5) Remover (Products)
+  curl -X DELETE "http://localhost:3000/api/v1/products/<uuid>" \
+       -H "Authorization: Bearer <TOKEN>"
+
+Subcategories (filtros comuns)
+- GET /subcategories?page=1&limit=10&search=gera&categoryId=<uuid>&isActive=true
+  curl "http://localhost:3000/api/v1/subcategories?page=1&limit=10&search=gera&isActive=true"
+
+AdminUsers (filtros comuns)
+- GET /admin-users?page=1&limit=10&search=maria&roleId=<uuid>&isActive=true&startDate=2024-08-01&endDate=2024-08-31
+  curl -H "Authorization: Bearer <TOKEN>" \
+       "http://localhost:3000/api/v1/admin-users?page=1&limit=10&search=maria"
+
+AccessPermissions (filtros comuns)
+- GET /access-permissions?page=1&limit=10&search=Editar&resource=Product&action=edit&startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
+
+RolePermissions (filtros comuns)
+- GET /role-permissions?page=1&limit=10&roleId=<uuid>&permissionId=<uuid>&startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
+
+UserRoles (filtros comuns)
+- GET /user-roles?page=1&limit=10&name=admin&isActive=true&startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
+
+Outros módulos seguem o mesmo padrão de CRUD, paginação e filtros. Consulte o Swagger para o contrato exato de cada Create*/Update*/Filter* DTO.
+
+Erros e Respostas
+- Formato padrão de sucesso: { success, message, data }
+- Códigos comuns: 200 OK, 201 Created, 400 Bad Request, 401 Unauthorized, 403 Forbidden, 404 Not Found
+- Em casos de validação, verifique mensagens detalhadas no corpo da resposta.
+
+Dicas
+- Use o Swagger para testar rapidamente cada endpoint.
+- Em produção, configure CORS, rate limit, helmet e variáveis no .env (JWT, DATABASE_URL, etc.).
+
+===========================
+GUIA RÁPIDO — PRODUCTS
+===========================
+
+Base: http://localhost:<PORT>/api/v1 (JWT obrigatório)
+
+Autenticação (obter token)
+1) POST /auth/register (opcional)
+2) POST /auth/login -> copiar accessToken
+
+Listar produtos (com paginação/filtros)
+curl "http://localhost:3000/api/v1/products?page=1&limit=20&search=gerador&minPrice=1000&maxPrice=50000&sortBy=price&sortOrder=asc" \
+     -H "Authorization: Bearer <TOKEN>"
+
+Obter por ID
+curl "http://localhost:3000/api/v1/products/<uuid>" \
+     -H "Authorization: Bearer <TOKEN>"
+
+Criar (admin/manager)
+curl -X POST "http://localhost:3000/api/v1/products" \
+     -H "Authorization: Bearer <TOKEN>" \
+     -H "Content-Type: application/json" \
+     -d '{
+           "code": "YMR-2024-001",
+           "name": "Gerador Industrial 500KW",
+           "model": "GEN-500-XL",
+           "description": "Gerador de alta eficiência para uso contínuo",
+           "price": 50000,
+           "brandId": "<uuid-marca>",
+           "subcategoryId": "<uuid-subcategoria>",
+           "stockQuantity": 10,
+           "isActive": true,
+           "features": ["Alta eficiência", "Baixa manutenção"],
+           "specifications": { "power": "500KW", "fuel": "Diesel" },
+           "documents": { "manual": "https://exemplo.com/manual.pdf" }
+         }'
+
+Atualizar (admin/manager)
+curl -X PATCH "http://localhost:3000/api/v1/products/<uuid>" \
+     -H "Authorization: Bearer <TOKEN>" \
+     -H "Content-Type: application/json" \
+     -d '{
+           "price": 47999.90,
+           "stockQuantity": 12,
+           "description": "Atualização: novo lote com melhorias"
+         }'
+
+Remover (admin)
+curl -X DELETE "http://localhost:3000/api/v1/products/<uuid>" \
+     -H "Authorization: Bearer <TOKEN>"
+
+Populares
+curl "http://localhost:3000/api/v1/products/popular?limit=5" \
+     -H "Authorization: Bearer <TOKEN>"
+
+Em destaque
+curl "http://localhost:3000/api/v1/products/featured?limit=8" \
+     -H "Authorization: Bearer <TOKEN>"
+
+Exemplo (fetch JS)
+// const BASE = 'http://localhost:3000/api/v1';
+// const TOKEN = '<TOKEN>';
+// fetch(`${BASE}/products?page=1&limit=10`, { headers: { Authorization: `Bearer ${TOKEN}` }})
+//   .then(r => r.json()).then(console.log);
