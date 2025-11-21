@@ -9,7 +9,8 @@
     "prebuild": "rimraf dist",
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
-    "start": "nest node --max-old-space-size=1024 ./node_modules/.bin/nest start",
+    "start": "node --max-old-space-size=1024 ./node_modules/.bin/nest start",
+    
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
